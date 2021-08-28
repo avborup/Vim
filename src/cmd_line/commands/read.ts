@@ -1,6 +1,8 @@
+import * as vscode from 'vscode';
 import { TextEditor } from '../../textEditor';
 import * as node from '../node';
 import { readFileAsync } from 'platform/fs';
+import { getPathDetails } from '../../util/path';
 import { SUPPORT_READ_COMMAND } from 'platform/constants';
 import { VimState } from '../../state/vimState';
 
@@ -58,7 +60,10 @@ export class ReadCommand extends node.CommandBase {
       return new Promise<string>((resolve, reject) => {
         try {
           import('child_process').then((cp) => {
-            return cp.exec(this.arguments.cmd as string, (err, stdout, stderr) => {
+            const cpOptions = {
+              cwd: getFocusedDirectory(),
+            };
+            return cp.exec(this.arguments.cmd as string, cpOptions, (err, stdout, stderr) => {
               if (err) {
                 reject(err);
               } else {
@@ -74,4 +79,24 @@ export class ReadCommand extends node.CommandBase {
       return '';
     }
   }
+}
+
+function getFocusedDirectory(): string | undefined {
+  const { workspaceFolders } = vscode.workspace;
+
+  if (workspaceFolders) {
+    return workspaceFolders[0].uri.fsPath;
+  }
+
+  const currentDocument = vscode.window.activeTextEditor?.document;
+
+  if (!currentDocument?.isUntitled) {
+    const documentUri = currentDocument?.uri as vscode.Uri;
+    return getPathDetails(documentUri.fsPath, documentUri, false).dirName;
+  }
+
+  // In the case where no folder is open and the file hasn't been written to
+  // disk, let child_process handle the working directory (by default the
+  // process working directory - i.e. VS Code)
+  return undefined;
 }
